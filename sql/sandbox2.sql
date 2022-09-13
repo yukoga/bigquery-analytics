@@ -22,15 +22,26 @@ CREATE OR REPLACE TABLE FUNCTION `msc-jp-cloud.ga4_sandbox.get_ga4_table_for_att
     start_date STRING, end_date STRING, timezone STRING, events ARRAY <STRING>
 )
 AS (
-    SELECT
-        user_pseudo_id AS visitor_id,
-        event_timestamp,
-        FORMAT_TIMESTAMP('%Y-%m-%dt', TIMESTAMP_MICROS(event_timestamp), timezone) event_date,
-        event_name,
-        event_params
-    FROM `adh-demo-data-review.analytics_213025502.events_*`
-    WHERE _TABLE_SUFFIX BETWEEN start_date AND end_date
-        AND event_name IN UNNEST(events)
+    WITH base AS (
+        SELECT
+            user_pseudo_id AS visitor_id,
+            MAX(CASE WHEN event_params.key = 'ga_session_number'
+                THEN event_params.value.int_value    END) AS session_number,
+            MAX(CASE WHEN event_params.key = 'ga_session_id'
+                THEN event_params.value.int_value    END) AS session_id,
+            FORMAT_TIMESTAMP('%Y-%m-%dt',
+                TIMESTAMP_MICROS(event_timestamp), timezone) event_date,
+            event_timestamp,
+            event_name,
+            event_params,
+        FROM `adh-demo-data-review.analytics_213025502.events_*`
+        WHERE _TABLE_SUFFIX BETWEEN start_date AND end_date
+            AND event_name IN UNNEST(events)
+    )
+
+    SELECT 
+        *, 
+    FROM base t1
 );
 
 CREATE TEMP FUNCTION GET_DATE_FROM_MICRO(fmt STRING, time_stamp INT64, timezone STRING)
@@ -96,7 +107,8 @@ BEGIN
     WITH base AS (
         SELECT 
             visitor_id,
-            GET_SESSION_ID(event_params) AS session_id,
+            session_id,
+            -- GET_SESSION_ID(event_params) AS session_id,
             event_date,
             event_timestamp,
             event_name,
@@ -118,6 +130,7 @@ BEGIN
     WHERE visitor_id IN (
         '856962968.1652906170'
     )
+    AND session_id = '1652906169'
     -- ) INTERSECT DISTINCT (
     --     SELECT * FROM UNNEST(['page_view', 'purchase'])
     -- )
