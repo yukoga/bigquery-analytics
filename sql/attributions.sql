@@ -70,25 +70,39 @@ AS (
 CREATE OR REPLACE FUNCTION ga4_sandbox.GET_SOURCE_MEDIUM(
     user_source STRING, user_medium STRING,
     event_source STRING, event_medium STRING,
-    page_location STRING, default_channel STRING)
+    page_location STRING, default_channel STRING,
+    session_number INT64)
 RETURNS STRING
 AS (
     LOWER(IFNULL(
         CASE 
 -- Traffic source priorities:
 -- user source --> dclid/gclid --> event source --> utm --> referrer --> direct
-            WHEN user_source IS NOT NULL THEN CONCAT(user_source, ' / ', user_medium)
-            WHEN REGEXP_CONTAINS(page_location, r'(&|\?)dclid=(.*)') THEN 'dv360 / cpm'
-            WHEN REGEXP_CONTAINS(page_location, r'(&|\?)gclid=(.*)') THEN 'google / cpc'
-            WHEN event_source IS NOT NULL THEN CONCAT(event_source, ' / ', event_medium)
-            -- WHEN REGEXP_CONTAINS(page_location, r'utm_source=([0-1a-zA-Z_\-]+)') THEN 
-            --     CONCAT(REGEXP_EXTRACT(page_location, r'utm_source=([0-1a-zA-Z_\-]+)', 1), ' / ',
-            --         REGEXP_EXTRACT(page_location, r'utm_medium=([0-1a-zA-Z_\-]+)', 1))
-            WHEN REGEXP_CONTAINS(page_location, r'utm_source=(.*)') THEN 
-                CONCAT(REGEXP_EXTRACT(page_location, r'utm_source=(.*)', 1), ' / ',
-                    REGEXP_EXTRACT(page_location, r'utm_medium=(.*)', 1))
+            WHEN session_number = 1 
+                AND user_source IS NOT NULL 
+                    THEN CONCAT(user_source, ' / ', user_medium)
+            WHEN session_number = 1  
+                AND user_source IS NULL
+                    THEN '(direct) / (none)'
+            WHEN session_number > 1
+                AND REGEXP_CONTAINS(page_location, r'(&|\?)dclid=(.*)') 
+                    THEN 'dv360 / cpm'
+            WHEN session_number > 1 
+                AND REGEXP_CONTAINS(page_location, r'(&|\?)gclid=(.*)')
+                    THEN 'google / cpc'
+            WHEN session_number > 1 
+                AND event_source IS NOT NULL
+                    THEN CONCAT(event_source, ' / ', event_medium)
+            WHEN session_number > 1
+                AND REGEXP_CONTAINS(page_location, r'utm_source=(.*)')
+                    THEN CONCAT(
+                        REGEXP_EXTRACT(page_location, r'utm_source=(.*)', 1),
+                        ' / ',
+                        REGEXP_EXTRACT(page_location, r'utm_medium=(.*)', 1))
             ELSE default_channel
-        END, default_channel))
+            END, default_channel
+        )
+    )
 );
 
 CREATE OR REPLACE TABLE FUNCTION `msc-jp-cloud.ga4_sandbox.get_ga4_table_for_attribution`(
@@ -105,6 +119,11 @@ AS (
                 FROM UNNEST(event_params) evp 
                 WHERE evp.key = 'ga_session_id'
                 AND evp.value.int_value IS NOT NULL) AS STRING) AS session_id,
+            CAST((
+                SELECT evp.value.int_value 
+                FROM UNNEST(event_params) evp 
+                WHERE evp.key = 'ga_session_number'
+                AND evp.value.int_value IS NOT NULL) AS STRING) AS session_number,                
             traffic_source.source AS user_source,
             traffic_source.medium AS user_medium,
             (SELECT evp.value.string_value FROM UNNEST(event_params) evp 
@@ -125,7 +144,6 @@ AS (
                 start_date, end_date, durations, timezone)[ORDINAL(1)]
             AND ga4_sandbox.GET_DATE_RANGE(
                 start_date, end_date, durations, timezone)[OFFSET(1)] 
-            -- BETWEEN start_date AND end_date
             AND event_name IN UNNEST(events)
     ), logs AS (
         SELECT
@@ -133,7 +151,7 @@ AS (
             ga4_sandbox.GET_SOURCE_MEDIUM(
                 t1.user_source, t1.user_medium,
                 t1.event_source, t1.event_medium,
-                t1.page_location, default_channel) AS source_medium,
+                t1.page_location, default_channel, t1.session_number) AS source_medium,
             ARRAY(
                 SELECT STRUCT <
                     name STRING,
@@ -157,6 +175,9 @@ AS (
 
     SELECT
         DISTINCT visitor_id, session_id, source_medium,
+        (SELECT
+            DATETIME(TIMESTAMP_MICROS(MIN(ev.timestamp)), timezone)
+                FROM UNNEST(events) ev) AS session_start_datetime,
         (SELECT MAX(CASE WHEN ev.name IN UNNEST(conversions)
             THEN 1 ELSE 0 END) = 1 FROM UNNEST(events) ev) AS is_converted_session,
         CASE WHEN source_medium = '(direct) / (none)'
@@ -173,12 +194,12 @@ BEGIN
     SELECT 
         visitor_id,
         session_id,
+        session_start_datetime,
         conversions,
         pageviews,
         is_converted_session,
         source_medium,
         is_direct,
-        -- events
     FROM ga4_sandbox.get_ga4_table_for_attribution(
         start_date, end_date,
         timezone,
@@ -191,10 +212,7 @@ BEGIN
         '856962968.1652906170',
         '338107230.1641092154'
     )
-    AND session_id = '1653310323'
-    -- ) INTERSECT DISTINCT (
-    --     SELECT * FROM UNNEST(['page_view', 'purchase'])
-    -- )
+    -- AND session_id IN ('1652906169', '1653310323')
     ORDER BY visitor_id, session_id ASC
 ;
 
