@@ -1,0 +1,45 @@
+DECLARE TIME_ZONE STRING DEFAULT 'Asia/Tokyo';
+DECLARE START_DATE STRING DEFAULT '20231023';
+DECLARE END_DATE STRING DEFAULT '20231027';
+
+
+WITH fresh_table AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    DATETIME(TIMESTAMP_MICROS(event_timestamp), TIME_ZONE) AS event_datetime,
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_*`
+  WHERE TRUE
+    AND (_TABLE_SUFFIX >= START_DATE AND _TABLE_SUFFIX <= END_DATE)
+), daily_table AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    DATETIME(TIMESTAMP_MICROS(event_timestamp), TIME_ZONE) AS event_datetime,
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_*`
+  WHERE TRUE
+    AND (_TABLE_SUFFIX >= START_DATE AND _TABLE_SUFFIX <= END_DATE)
+)
+
+SELECT 
+  ft.event_date AS event_date,
+  ft.event_count AS event_count_on_fresh_table,
+  dt.event_count AS event_count_on_daily_table,
+  ROUND(((ft.event_count - dt.event_count)/dt.event_count)*100, 2) AS diff_percent_against_daily_export
+FROM (
+SELECT 
+  FORMAT_DATETIME('%F', event_datetime) AS event_date,
+  COUNT(*) AS event_count
+FROM fresh_table
+GROUP BY event_date) AS ft
+LEFT JOIN
+(
+  SELECT 
+    FORMAT_DATETIME('%F', event_datetime) AS event_date,
+    COUNT(*) AS event_count
+  FROM daily_table
+  GROUP BY event_date) dt
+USING(event_date)
+ORDER BY event_date

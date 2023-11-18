@@ -1,0 +1,44 @@
+DECLARE start_date STRING DEFAULT '20210101';
+DECLARE end_date STRING DEFAULT '20210131';
+DECLARE timezone STRING DEFAULT 'Asia/Tokyo';
+DECLARE valid_events ARRAY<STRING> 
+  DEFAULT ['first_visit', 'session_start', 'page_view', 
+    'view_item', 'view_promotion', 'view_item_list', 'view_search_resutls',
+    'add_to_cart', 'add_payment_info', 'add_to_wishlist', 'begin_checkout', 'purchase'];
+
+SELECT * FROM (
+SELECT
+  t1.event_date,
+  t1.visitor_id AS visitor_id_1,
+  t2.visitor_id AS visitor_id_2,
+  CASE WHEN 
+    t1.event_timestamp = MIN(t1.event_timestamp)
+    THEN t1.event_name END AS first_event_name,
+  CASE WHEN t1.evvent_timestamp = MAX(t2.event_timestamp)
+    THEN t1.event_name END AS last_event_name,
+  t1.event_name,
+  t2.event_name,
+  t1.event_datetime,
+  t2.event_datetime,
+  t1.event_timestamp,
+  t2.event_timestamp
+FROM ga4_temp_sandbox.GET_BASE_EVENTS(start_date, end_date, timezone) t1
+LEFT JOIN ga4_temp_sandbox.GET_BASE_EVENTS(start_date, end_date, timezone) t2
+ON t1.visitor_id = t2.visitor_id
+--   AND t1.event_timestamp < t2.event_timestamp
+WHERE TRUE
+  AND DATETIME_DIFF(t2.event_datetime, t1.event_datetime, MINUTE) <= 30
+  AND t1.event_name IN UNNEST(valid_events)
+  -- LIMIT 30;
+)
+ORDER BY t1.visitor_id, t1.event_datetime
+LIMIT 100
+/*
+*/
+
+/*
+SELECT event_name, COUNT(*)
+FROM ga4_temp_sandbox.GET_BASE_EVENTS(start_date, end_date, timezone) t1
+-- WHERE event_name IN UNNEST(valid_events)
+GROUP BY 1
+*/

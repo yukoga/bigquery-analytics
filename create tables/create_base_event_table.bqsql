@@ -1,0 +1,16 @@
+CREATE OR REPLACE TABLE FUNCTION `gps-retail-jp.ga4_temp_sandbox.BaseEvents`(start_date STRING, end_date STRING, timezone STRING) AS (
+SELECT
+  event_date,
+  user_pseudo_id AS visitor_id,
+  CAST((SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS STRING) AS session_id,
+  event_name AS event_name, event_params AS event_params,
+  event_timestamp AS event_timestamp,
+  DATETIME(TIMESTAMP_MICROS(event_timestamp), timezone) AS event_datetime,
+FROM
+  `adh-demo-data-review.analytics_213025502.events_*`
+WHERE TRUE
+  AND (_TABLE_SUFFIX >= start_date AND _TABLE_SUFFIX <= end_date)
+  AND event_name IN UNNEST(['first_visit', 'session_start', 'page_view', 
+    'view_item', 'view_promotion', 'view_item_list', 'view_search_resutls',
+    'add_to_cart', 'add_payment_info', 'add_to_wishlist', 'begin_checkout', 'purchase'])
+);

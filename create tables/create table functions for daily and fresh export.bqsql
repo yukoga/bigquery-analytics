@@ -1,0 +1,25 @@
+CREATE OR REPLACE TABLE FUNCTION `gps-retail-jp.ga4_temp_sandbox.DailyAndFreshEvents`(start_date STRING, end_date STRING, timezone STRING) AS (
+  SELECT 
+    'fresh' AS export_type,
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key,
+    evp.values AS evp_value
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_*`,
+    UNNEST(event_params) AS evp
+  WHERE TRUE
+    AND (_TABLE_SUFFIX >= start_date AND _TABLE_SUFFIX <= end_date)
+  UNION ALL 
+  SELECT 
+    'daily' AS export_type,
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key,
+    evp.values AS evp_value
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_*`,
+    UNNEST(event_params) AS evp
+  WHERE TRUE
+    AND (_TABLE_SUFFIX >= start_date AND _TABLE_SUFFIX <= end_date)
+);

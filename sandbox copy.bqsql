@@ -1,0 +1,95 @@
+DECLARE start_date STRING DEFAULT '20210101';
+DECLARE end_date STRING DEFAULT '20210103';
+DECLARE timezone STRING DEFAULT 'Asia/Tokyo';
+DECLARE valid_events ARRAY<STRING> DEFAULT ['page_view'];
+DECLARE purchase_events ARRAY<STRING> DEFAULT ['in_app_purchase', 'ecommerce_purchase', 'purchase'];
+
+
+-- SELECT visitor_id, session_id, event_timestamp, page_title, is_converted, is_engaged
+-- FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+-- WHERE TRUE 
+--     AND event_name = 'page_view'
+--     AND visitor_id IN UNNEST(['1000244300.1609516493', '1015753189.1607206401', '1058870549.1609211558']) 
+
+
+
+BEGIN
+SELECT 
+  visitor_id, visitor_id_2,
+  session_id, session_id_2,
+  is_converted,
+  event_timestamp, event_timestamp_2,
+  event_datetime, event_datetime_2,
+  page_rank, page_rank_2,
+  page_title, page_title_2,
+  time_on_page
+FROM (
+  SELECT
+    t1.visitor_id, t2.visitor_id AS visitor_id_2,
+    t1.session_id, t2.session_id AS session_id_2,
+    t1.is_converted,
+    -- t1.event_timestamp, t2.event_timestamp AS event_timestamp_2,
+    -- t1.event_datetime, t2.event_datetime AS event_datetime_2,
+    -- t1.page_rank, t2.page_rank AS page_rank_2,
+    t1.page_title, t2.page_title AS page_title_2,
+    ROUND((t2.event_timestamp - t1.event_timestamp)/1000000, 2) AS time_on_page
+  FROM (
+    SELECT
+      visitor_id, session_id, is_converted,
+      event_timestamp, event_datetime,
+      RANK() OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp) AS page_rank,
+      page_title, page_location
+    FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+    WHERE TRUE
+      AND event_name = 'page_view'
+      AND NOT (
+        LOWER(page_title) LIKE '%checkout%'
+        OR LOWER(page_title) LIKE '%cart%'
+        OR LOWER(page_title) LIKE '%payment%'
+        OR LOWER(page_title) LIKE '%shipping%'
+      )
+      AND visitor_id IN UNNEST([
+          -- '1000244300.1609516493',  -- engaged but not converted
+          -- '1015753189.1607206401',  -- engaged and converted
+          '1058870549.1609211558'   -- engaged and converted
+      ])
+  ) t1 
+  LEFT JOIN (
+    SELECT
+      visitor_id, session_id,
+      event_timestamp, event_datetime,
+      RANK() OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp) AS page_rank,
+      page_title, page_location
+    FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+    WHERE TRUE
+      AND event_name = 'page_view'
+      AND NOT (
+        LOWER(page_title) LIKE '%checkout%'
+        OR LOWER(page_title) LIKE '%cart%'
+        OR LOWER(page_title) LIKE '%payment%'
+        OR LOWER(page_title) LIKE '%shipping%'
+      )
+  ) t2
+  ON t1.visitor_id = t2.visitor_id
+  AND t1.session_id = t2.session_id
+  AND t1.page_rank + 1 = t2.page_rank
+  WHERE TRUE
+    AND t1.page_rank = 1
+    AND t2.visitor_id IS NOT NULL
+)
+-- GROUP BY page_title, is_converted
+-- ORDER BY page_title, is_converted, avg_time_on_page
+ORDER BY visitor_id, session_id, event_timestamp 
+;
+EXCEPTION WHEN ERROR THEN
+  # Get error informations
+  SELECT
+    @@error.message;
+    -- @@error.stack_trace,
+    -- @@error.statement_text,
+    -- @@error.formatted_stack_trace;
+END;
+
+
+
+/**/

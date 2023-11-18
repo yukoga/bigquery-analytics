@@ -1,0 +1,94 @@
+DECLARE start_date STRING DEFAULT '20210101';
+DECLARE end_date STRING DEFAULT '20210103';
+DECLARE timezone STRING DEFAULT 'Asia/Tokyo';
+DECLARE valid_events ARRAY<STRING> DEFAULT ['page_view'];
+DECLARE purchase_events ARRAY<STRING> DEFAULT ['in_app_purchase', 'ecommerce_purchase', 'purchase'];
+
+
+-- SELECT visitor_id, session_id, event_timestamp, page_title, is_converted, is_engaged
+-- FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+-- WHERE TRUE 
+--     AND event_name = 'page_view'
+--     AND visitor_id IN UNNEST(['1000244300.1609516493', '1015753189.1607206401', '1058870549.1609211558']) 
+
+
+
+BEGIN
+  SELECT
+    -- t1.visitor_id AS visitor_id,
+    -- t1.session_id AS session_id,
+    t1.page_title AS page_title,
+    -- t1.event_timestamp,
+    -- t1.is_engaged,
+    t1.is_converted,
+    COUNT(*) AS page_views,
+    -- ROUND(SUM(t1.is_engaged)/COUNT(*), 2) AS avg_engagement_rate,
+    ROUND(AVG((t2.event_timestamp - t1.event_timestamp)/1000000), 2) AS avg_time_on_page,
+    IFNULL(ROUND(STDDEV_SAMP((t2.event_timestamp - t1.event_timestamp)/1000000), 2), 0) AS std_time_on_page,
+    -- COUNT(*) AS totals,
+    -- COUNT(t1.is_converted) AS cnt_converted,
+    -- SUM(CAST(t1.is_converted AS INT64)) AS sum_converted,
+    -- COUNT(DISTINCT t1.session_id) AS cnt_distinct_session_id,
+    -- COUNT(t1.session_id) AS cnt_session_id,
+    -- COUNT(DISTINCT CASE WHEN t1.is_converted THEN t1.session_id ELSE NULL END) cnt_distinct_session_id_when_converted,
+    -- COUNT(DISTINCT CASE WHEN NOT t1.is_converted THEN t1.session_id ELSE NULL END) cnt_distinct_session_id_when_not_converted,
+    -- COUNT(*) AS page_views,
+    -- SUM(is_engaged) / SUM(CASE WHEN t1.is_engaged = 1 THEN COUNT(DISTINCT t1.session_id) ELSE 0 END) AS engagement_rate,
+    -- MAX(is_converted) AS is_converted,
+    -- (t2.event_timestamp - t1.event_timestamp)/1000000 AS time_on_page,
+  --   t1.event_name AS event_name,
+    -- t1.event_datetime AS event_datetime,
+  --   t1.page_location AS page_location,
+  --   t1.page_category AS page_category,
+  FROM (
+    SELECT
+      visitor_id, session_id, page_title, event_timestamp,
+      DENSE_RANK() OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp) AS rank,
+      MAX(CAST(is_engaged AS INT64))
+        OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp
+          ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS is_engaged,
+      MAX(is_converted)
+        OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp
+          ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS is_converted,
+    FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+    WHERE TRUE 
+      AND event_name = 'page_view'
+      AND NOT (
+        LOWER(page_title) LIKE '%checkout%'
+        OR LOWER(page_title) LIKE '%cart%'
+        OR LOWER(page_title) LIKE '%payment%'
+        OR LOWER(page_title) LIKE '%shipping%'
+      )
+      -- AND visitor_id IN UNNEST([
+      --     '1000244300.1609516493',  -- engaged but not converted
+      --     '1015753189.1607206401',  -- engaged and converted
+      --     '1058870549.1609211558'   -- engaged and converted
+      -- ])
+  ) t1 LEFT JOIN (
+    SELECT visitor_id, session_id, event_timestamp,
+      DENSE_RANK() OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp) AS rank
+    FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+    WHERE TRUE
+  ) t2 ON t1.visitor_id = t2.visitor_id 
+    AND t1.session_id = t2.session_id 
+    AND t1.rank + 1 = t2.rank
+  WHERE TRUE
+    AND t1.page_title IS NOT NULL
+    AND t2.event_timestamp IS NOT NULL
+  GROUP BY t1.page_title, t1.is_converted
+  -- HAVING t1.page_title = 'checkout your information'
+  -- HAVING t1.page_title = 'sale | google merchandise store'
+  HAVING t1.page_title = 'android geek pin'
+  ORDER BY t1.page_title, t1.is_converted;
+EXCEPTION WHEN ERROR THEN
+  # Get error informations
+  SELECT
+    @@error.message;
+    -- @@error.stack_trace,
+    -- @@error.statement_text,
+    -- @@error.formatted_stack_trace;
+END;
+
+
+
+/**/

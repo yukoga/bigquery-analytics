@@ -1,0 +1,76 @@
+DECLARE start_date STRING DEFAULT '20210101';
+DECLARE end_date STRING DEFAULT '20210103';
+DECLARE cv_start_date STRING DEFAULT '20210301';
+DECLARE cv_end_date STRING DEFAULT '20210331';
+DECLARE timezone STRING DEFAULT 'Asia/Tokyo';
+DECLARE valid_events ARRAY<STRING> DEFAULT ['page_view'];
+DECLARE purchase_events ARRAY<STRING> DEFAULT ['in_app_purchase', 'ecommerce_purchase', 'purchase'];
+
+
+
+SELECT
+  DISTINCT
+    visitor_id,
+    session_id,
+    is_converted,
+    event_name,
+    event_datetime,
+    ga4_temp_sandbox.get_page_categories(page_location) AS page_category,
+    -- CASE WHEN 
+    --   REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/apparel($|.*)\/?")
+    --     THEN "apparel"
+    --  WHEN
+    --   REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/google($|.*)\/?")
+    --     THEN "google brand"
+    -- WHEN 
+    --   REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/super\+g($|.*)\/?")
+    --     THEN "super-g"
+    -- WHEN 
+    --   REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/([\w\d\+]+)\/?")
+    --     THEN REGEXP_EXTRACT(page_location, r".*\/google\+redesign\/([\w\d\+]+)\/?")
+    -- ELSE "others" END AS page_category,
+    -- COALESCE(REGEXP_EXTRACT(LOWER(page_location),
+    -- r".*\/google\+redesign\/([\w\d\+]+)\/?"), 'others') AS page_category,
+    page_location,
+    page_title,
+    event_timestamp,
+    next_event_timestamp,
+    (next_event_timestamp - event_timestamp)/1000000 AS time_on_page
+FROM (
+  SELECT
+    visitor_id,
+    session_id,
+    CASE WHEN session_id IN (
+      SELECT DISTINCT session_id
+      FROM `gps-retail-jp.ga4_temp_sandbox.BaseEvents`(start_date, end_date, timezone)
+      WHERE event_name IN UNNEST(purchase_events))
+    THEN 1 ELSE 0 END AS is_converted,
+    event_datetime,
+    event_timestamp,
+    event_name,
+    LOWER((SELECT value.string_value FROM UNNEST(event_params)
+      WHERE key = 'page_location')) AS page_location,
+    (SELECT value.string_value FROM UNNEST(event_params)
+      WHERE key = 'page_title') AS page_title,
+    LEAD(event_timestamp) OVER (
+      PARTITION BY (SELECT value.int_value FROM UNNEST(event_params)
+        WHERE key = 'ga_session_id')
+      ORDER BY event_timestamp ASC) AS next_event_timestamp
+  FROM `gps-retail-jp.ga4_temp_sandbox.BaseEvents`(start_date, end_date, timezone)
+  WHERE TRUE
+    AND event_name IN UNNEST(valid_events)
+)
+WHERE TRUE
+  AND next_event_timestamp IS NOT NULL
+  AND event_timestamp != next_event_timestamp
+  -- Exclude purchase process page as it's not for a page speed analysis.
+  AND NOT (
+    LOWER(page_title) LIKE '%checkout%'
+    OR LOWER(page_title) LIKE '%cart%'
+    OR LOWER(page_title) LIKE '%payment%'
+    OR LOWER(page_title) LIKE '%shipping%'
+  )
+ORDER BY
+  visitor_id ASC,
+  session_id ASC,
+  event_timestamp ASC

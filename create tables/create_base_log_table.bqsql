@@ -1,0 +1,24 @@
+CREATE OR REPLACE TABLE FUNCTION `gps-retail-jp.ga4_temp_sandbox.BaseLog`(start_date STRING, end_date STRING, timezone STRING) AS (
+SELECT
+  user_pseudo_id AS visitor_id,
+  event_timestamp AS event_timestamp,
+  DATETIME(TIMESTAMP_MICROS(event_timestamp), timezone) AS event_datetime,
+  event_name AS event_name,
+  ep.key AS event_parameter_key,
+  COALESCE(
+    LOWER(ep.value.string_value),
+    CAST(ep.value.int_value AS STRING),
+    CAST(ep.value.float_value AS STRING), 
+    CAST(ep.value.double_value AS STRING)) AS event_parameter_value,
+  ga4_temp_sandbox.get_page_categories(
+    LOWER(CASE WHEN ep.key = 'page_location' THEN ep.value.string_value ELSE 'N/A' END)
+  ) AS page_category  
+FROM
+  `adh-demo-data-review.analytics_213025502.events_*`,
+    UNNEST(event_params) AS ep
+WHERE TRUE
+  AND (_TABLE_SUFFIX >= start_date AND _TABLE_SUFFIX <= end_date)
+  AND event_name IN UNNEST(['first_visit', 'session_start', 'page_view', 
+    'view_item', 'view_promotion', 'view_item_list', 'view_search_resutls',
+    'add_to_cart', 'add_payment_info', 'add_to_wishlist', 'begin_checkout', 'purchase'])
+);

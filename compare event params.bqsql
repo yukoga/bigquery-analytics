@@ -1,0 +1,41 @@
+DECLARE TIME_ZONE STRING DEFAULT 'Asia/Tokyo';
+DECLARE START_DATE STRING DEFAULT '20231023';
+DECLARE END_DATE STRING DEFAULT '20231027';
+
+
+WITH fresh_table AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    DATETIME(TIMESTAMP_MICROS(event_timestamp), TIME_ZONE) AS event_datetime,
+    evp.key AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_*`,
+    UNNEST(event_params) AS evp
+  WHERE TRUE
+    AND (_TABLE_SUFFIX >= START_DATE AND _TABLE_SUFFIX <= END_DATE)
+), daily_table AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    DATETIME(TIMESTAMP_MICROS(event_timestamp), TIME_ZONE) AS event_datetime,
+    evp.key AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_*`,
+    UNNEST(event_params) AS evp
+  WHERE TRUE
+    AND (_TABLE_SUFFIX >= START_DATE AND _TABLE_SUFFIX <= END_DATE)
+)
+
+SELECT
+  dt.user_pseudo_id AS cid_daily,
+  ft.user_pseudo_id AS cid_fresh,
+  dt.event_name AS event_name_daily,
+  ft.event_name AS event_name_fresh,
+  dt.event_timestamp AS event_timestamp_daily,
+  ft.event_timestamp AS event_timestamp_fresh,
+  dt.evp_key AS event_params_key_daily,
+  ft.evp_key AS event_params_key_fresh
+FROM fresh_table ft LEFT JOIN daily_table dt
+USING (user_pseudo_id, event_name, event_timestamp, evp_key)
+WHERE TRUE 

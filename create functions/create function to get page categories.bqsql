@@ -1,0 +1,23 @@
+CREATE OR REPLACE FUNCTION `ga4_temp_sandbox.get_page_categories`(`page_location` STRING)
+  RETURNS STRING 
+  AS (
+    CASE WHEN REGEXP_CONTAINS(page_location, r"^http(s)?:\/\/")
+      THEN 
+        CASE WHEN 
+          REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/apparel($|.*)\/?")
+            THEN "apparel"
+          WHEN
+            REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/google($|.*)\/?")
+              THEN "google brand"
+          WHEN 
+            REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/super\+g($|.*)\/?")
+              THEN "super-g"
+          WHEN 
+          REGEXP_CONTAINS(page_location, r".*\/google\+redesign\/([\w\d\+]+)\/?")
+            THEN REGEXP_EXTRACT(page_location, r".*\/google\+redesign\/([\w\d\+]+)\/?")
+        ELSE "others" END
+    ELSE "N/A" END
+  );
+
+-- SELECT ga4_temp_sandbox.get_page_categories("https://example.com/google+redesign/super+g+hoge"),
+-- ga4_temp_sandbox.get_page_categories("hogefuga")

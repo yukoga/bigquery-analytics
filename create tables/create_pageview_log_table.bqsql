@@ -1,0 +1,24 @@
+CREATE OR REPLACE TABLE FUNCTION `ga4_temp_sandbox.PageviewLog`(start_date STRING, end_date STRING, timezone STRING) AS (
+SELECT
+  visitor_id,
+  event_name,
+  event_timestamp,
+  event_datetime,
+  MAX(CASE WHEN event_parameter_key = 'ga_session_id' THEN event_parameter_value ELSE NULL END) AS session_id,
+  MAX(CASE WHEN event_parameter_key = 'session_engaged' THEN CAST(event_parameter_value AS INT64) ELSE 0 END) AS is_engaged,
+  MAX(CASE WHEN event_parameter_key = 'page_location' THEN event_parameter_value ELSE NULL END) AS page_location,
+  MAX(CASE WHEN event_parameter_key = 'page_title' THEN event_parameter_value ELSE NULL END) AS page_title,
+  MAX(
+    ga4_temp_sandbox.get_page_categories(
+      CASE WHEN event_parameter_key = 'page_location' 
+        THEN event_parameter_value ELSE NULL END)) AS page_category,
+  MAX((CASE WHEN event_parameter_key = 'ga_session_id' THEN event_parameter_value ELSE NULL END)
+    IN (SELECT DISTINCT session_id FROM ga4_temp_sandbox.ConversionEvents(start_date, end_date, timezone))
+  ) AS is_converted,
+FROM ga4_temp_sandbox.BaseLog(start_date, end_date, timezone)
+WHERE TRUE 
+  AND event_name IN UNNEST(['page_view'])
+  AND event_parameter_key IN UNNEST(['ga_session_id', 'session_engaged', 'page_location', 'page_title', 'page_category'])
+GROUP BY 1, 2, 3, 4
+ORDER BY visitor_id, event_timestamp
+);

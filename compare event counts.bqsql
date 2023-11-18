@@ -1,0 +1,144 @@
+DECLARE TIME_ZONE STRING DEFAULT 'Asia/Tokyo';
+DECLARE START_DATE STRING DEFAULT '20231023';
+DECLARE END_DATE STRING DEFAULT '20231027';
+DECLARE PROJECT STRING DEFAULT 'ga-japan-blog-gold-test';
+
+WITH fresh_table_27 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_20231027`,
+    UNNEST(event_params) AS evp),
+daily_table_27 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_20231027`,
+    UNNEST(event_params) AS evp),
+fresh_table_26 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_20231026`,
+    UNNEST(event_params) AS evp),
+daily_table_26 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_20231026`,
+    UNNEST(event_params) AS evp),
+fresh_table_25 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_20231025`,
+    UNNEST(event_params) AS evp),
+daily_table_25 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_20231025`,
+    UNNEST(event_params) AS evp),
+fresh_table_24 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_20231024`,
+    UNNEST(event_params) AS evp),
+daily_table_24 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_20231024`,
+    UNNEST(event_params) AS evp),
+fresh_table_23 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_fresh_20231023`,
+    UNNEST(event_params) AS evp),
+daily_table_23 AS (
+  SELECT 
+    user_pseudo_id,
+    event_name,
+    event_timestamp,
+    evp.key AS evp_key
+    -- (SELECT key FROM UNNEST(event_params)) AS evp_key
+  FROM `ga-japan-blog-gold-test.analytics_203698597.events_20231023`,
+    UNNEST(event_params) AS evp)
+
+SELECT
+  td.user_pseudo_id AS cid_daily,
+  tf.user_pseudo_id AS cid_fresh,
+  td.event_name AS event_name_daily,
+  tf.event_name AS event_name_fresh,
+  td.event_timestamp AS event_timestamp_daily,
+  tf.event_timestamp AS event_timestamp_fresh,
+  td.evp_key AS event_params_key_daily,
+  tf.evp_key AS event_params_key_fresh
+FROM fresh_table_23 tf LEFT JOIN daily_table_23 td
+USING (user_pseudo_id, event_name, event_timestamp, evp_key)
+WHERE TRUE 
+  -- AND td.event_name IS NOT NULL
+  -- AND td.evp_key IS NULL
+
+
+/*
+UNION ALL
+SELECT
+  td.user_pseudo_id AS cid_daily,
+  tf.user_pseudo_id AS cid_fresh,
+  td.event_name AS event_name_daily,
+  tf.event_name AS event_name_fresh,
+  td.event_timestamp AS event_timestamp_daily,
+  tf.event_timestamp AS event_timestamp_fresh
+FROM fresh_table_24 tf LEFT JOIN daily_table_24 td
+USING (user_pseudo_id, event_name, event_timestamp, evp_key)
+UNION ALL
+SELECT
+  td.user_pseudo_id AS cid_daily,
+  tf.user_pseudo_id AS cid_fresh,
+  td.event_name AS event_name_daily,
+  tf.event_name AS event_name_fresh,
+  td.event_timestamp AS event_timestamp_daily,
+  tf.event_timestamp AS event_timestamp_fresh
+FROM fresh_table_26 tf LEFT JOIN daily_table_26 td
+USING (user_pseudo_id, event_name, event_timestamp, evp_key)
+
+SELECT
+  td.user_pseudo_id AS cid_daily,
+  tf.user_pseudo_id AS cid_fresh,
+  td.event_name AS event_name_daily,
+  tf.event_name AS event_name_fresh,
+  td.event_timestamp AS event_timestamp_daily,
+  tf.event_timestamp AS event_timestamp_fresh
+FROM fresh_table_26 tf LEFT JOIN daily_table_26 td
+USING (user_pseudo_id, event_name, event_timestamp, evp_key)
+*/

@@ -1,0 +1,88 @@
+DECLARE start_date STRING DEFAULT '20210101';
+-- DECLARE end_date STRING DEFAULT '20211231';
+DECLARE end_date STRING DEFAULT '20210131';
+DECLARE timezone STRING DEFAULT 'Asia/Tokyo';
+DECLARE valid_events ARRAY<STRING> DEFAULT ['page_view'];
+DECLARE purchase_events ARRAY<STRING> DEFAULT ['in_app_purchase', 'ecommerce_purchase', 'purchase'];
+
+
+-- SELECT visitor_id, session_id, event_timestamp, page_title, is_converted, is_engaged
+-- FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+-- WHERE TRUE 
+--     AND event_name = 'page_view'
+--     AND visitor_id IN UNNEST(['1000244300.1609516493', '1015753189.1607206401', '1058870549.1609211558']) 
+
+
+
+BEGIN
+WITH base AS (
+  SELECT DISTINCT visitor_id, session_id, event_timestamp, event_datetime, event_name
+  FROM ga4_temp_sandbox.BaseEvents(start_date, end_date, timezone)
+), purchased_sessions AS (
+  SELECT DISTINCT visitor_id, session_id, event_timestamp, event_datetime, event_name
+  FROM base
+  WHERE TRUE
+    AND visitor_id IN (SELECT visitor_id FROM ga4_temp_sandbox.ConversionEvents(start_date, end_date, timezone))
+), non_purchased_sessions AS (
+  SELECT DISTINCT visitor_id, session_id, event_timestamp, event_datetime, event_name
+  FROM base
+  WHERE visitor_id NOT IN (SELECT visitor_id FROM purchased_sessions)
+)
+
+SELECT
+  visitor_id, -- session_id, event_datetime, event_name, event_timestamp,
+  session_id,
+  event_timestamp,
+  event_name,
+  -- CASE WHEN event_name = 'purchase' THEN session_id ELSE NULL END AS purchase_session_id,
+  -- FIRST_VALUE(session_id) OVER (PARTITION BY visitor_id ORDER BY event_timestamp) AS first_session_id,
+  -- (SELECT session_id FROM purchases p WHERE p.visitor_id = visitor_id ORDER BY event_timestamp LIMIT 1) AS first_purchase_session_id,
+  -- (SELECT visitor_id FROM purchases p WHERE p.visitor_id = visitor_id ORDER BY event_timestamp LIMIT 1) AS first_purchase_visitor_id,
+
+  -- (SELECT DISTINCT session_id, event_timestamp FROM purchases p WHERE p.session_id = session_id ORDER BY event_timestamp LIMIT 1),
+  -- (SELECT session_id FROM ga4_temp_sandbox)
+  -- event_timestamp,
+  -- event_name,
+  -- MAX(CASE WHEN event_name = 'purchase' THEN event_timestamp ELSE NULL END) AS purchase_timestamp,
+  -- CASE WHEN session_id IN (
+  --   SELECT DISTINCT session_id FROM ga4_temp_sandbox.ConversionEvents(start_date, end_date, timezone))
+  --   THEN session_id ELSE CONCAT('NOT-', CAST(session_id AS STRING)) END AS is_converted,
+-- /* aggregated metrics */
+  -- COUNT(DISTINCT session_id) AS n_sessions,
+  -- COUNT(DISTINCT CASE WHEN session_id IN (
+  --   SELECT DISTINCT session_id FROM ga4_temp_sandbox.ConversionEvents(start_date, end_date, timezone))
+  --   THEN session_id ELSE NULL END) AS converted_sessions,
+  -- SUM(CASE WHEN event_name = 'purchase' THEN 1 ELSE 0 END) AS n_purchases,
+-- FROM non_purchased_sessions
+FROM base LEFT JOIN (
+  SELECT DISTINCT 
+)
+WHERE TRUE
+  -- AND event_name = 'purchase'
+  -- AND session_id IN (
+  --   SELECT DISTINCT session_id FROM ga4_temp_sandbox.ConversionEvents(start_date, end_date, timezone)
+  -- )
+  AND visitor_id IN UNNEST([
+      -- '1644286712.1610647814',  -- 44 times converted sessions
+      -- '1000244300.1609516493',  -- engaged but not converted
+      -- '1015753189.1607206401',  -- engaged and converted
+      -- '1058870549.1609211558',   -- engaged and converted
+      NULL
+  ])
+  -- AND event_name = 'purchase'
+-- GROUP BY visitor_id
+ORDER BY event_timestamp
+-- ORDER BY event_timestamp --converted_sessions DESC, visitor_id --, session_id, event_timestamp
+;
+EXCEPTION WHEN ERROR THEN
+  # Get error informations
+  SELECT
+    @@error.message;
+    -- @@error.stack_trace,
+    -- @@error.statement_text,
+    -- @@error.formatted_stack_trace;
+END;
+
+
+
+/**/

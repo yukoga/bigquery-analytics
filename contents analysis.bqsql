@@ -1,0 +1,36 @@
+DECLARE start_date STRING DEFAULT '20210101';
+DECLARE end_date STRING DEFAULT '20210103';
+DECLARE timezone STRING DEFAULT 'Asia/Tokyo';
+DECLARE valid_events ARRAY<STRING> DEFAULT ['page_view'];
+DECLARE purchase_events ARRAY<STRING> DEFAULT ['in_app_purchase', 'ecommerce_purchase', 'purchase'];
+
+
+SELECT
+  t1.visitor_id AS visitor_id,
+  t1.session_id AS session_id,
+  t1.is_engaged AS is_engaged,
+  CAST(t1.is_engaged AS INT64) AS is_engaged,
+  CAST(t1.is_converted AS INT64) AS is_converted,
+  (t2.event_timestamp - t1.event_timestamp)/1000000 AS time_on_page,
+  t1.event_name AS event_name,
+  t1.event_datetime AS event_datetime,
+  t1.page_location AS page_location,
+  t1.page_category AS page_category,
+FROM (
+  SELECT
+    DENSE_RANK() OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp) AS rank,
+    *,
+  FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+  WHERE TRUE 
+    AND event_name = 'page_view'
+    AND visitor_id IN UNNEST(['1000244300.1609516493', '1015753189.1607206401', '1058870549.1609211558'])
+) t1 LEFT JOIN (
+  SELECT visitor_id, session_id, event_timestamp,
+    DENSE_RANK() OVER (PARTITION BY visitor_id, session_id ORDER BY event_timestamp) AS rank
+  FROM ga4_temp_sandbox.PageviewLog(start_date, end_date, timezone)
+  WHERE TRUE
+) t2 ON t1.visitor_id = t2.visitor_id 
+  AND t1.session_id = t2.session_id 
+  AND t1.rank + 1 = t2.rank
+WHERE TRUE
+  AND t2.event_timestamp IS NOT NULL

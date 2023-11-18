@@ -1,0 +1,190 @@
+with ga_fresh AS (
+SELECT
+CONCAT(
+    IFNULL(CAST(event_timestamp AS STRING), ''),
+    IFNULL(user_pseudo_id, ''),
+    IFNULL(CAST(ga_session_id AS STRING), ''),
+    IFNULL(event_name, '')
+) AS concatenated_key,
+uid,
+session_registered,
+hit_query_params,
+collected_traffic_source.*
+FROM `monotaro-ga4.analytics_255530074.events_fresh_20230912`
+FOR SYSTEM_TIME AS OF TIMESTAMP_ADD(TIMESTAMP(CONCAT('2023-09-13', ' 6:00:00'), 'Asia/Tokyo'), INTERVAL 10 MINUTE)
+LEFT JOIN UNNEST([STRUCT(
+  `bqutil.fn.get_value`('page_location', event_params).string_value AS page_location,
+  `bqutil.fn.get_value`('event_action', event_params).string_value AS event_action,
+  `bqutil.fn.get_value`('event_label', event_params).string_value AS event_label,
+  `bqutil.fn.get_value`('ga_session_id', event_params).string_value AS ga_session_id,
+  `bqutil.fn.get_value`('cd30', event_params).string_value AS sp_view,
+  `bqutil.fn.get_value`('source', event_params).string_value AS source,
+  `bqutil.fn.get_value`('medium', event_params).string_value AS medium,
+  `bqutil.fn.get_value`('campaign', event_params).string_value AS campaign,
+  `bqutil.fn.get_value`('term', event_params).string_value AS term,
+  `bqutil.fn.get_value`('entrances', event_params).int_value = 1 AS is_entrance,
+  `bqutil.fn.get_value`('gclid', event_params).int_value = 1 AS gclid,
+  `bqutil.fn.get_value`('cd49', event_params).string_value AS landing_pagegroup,
+  `bqutil.fn.get_value`('cd3', event_params).string_value AS uid,
+  `bqutil.fn.get_value`('cd5', event_params).string_value AS session_registered,
+  `bqutil.fn.get_value`('cd7', event_params).string_value AS hit_query_params
+)]) AS params
+),
+
+ga_general AS (
+SELECT 
+CONCAT(
+    IFNULL(CAST(event_timestamp AS STRING), ''),
+    IFNULL(user_pseudo_id, ''),
+    IFNULL(CAST(ga_session_id AS STRING), ''),
+    IFNULL(event_name, '')
+) AS concatenated_key,
+uid,
+session_registered,
+hit_query_params,
+collected_traffic_source.*
+FROM `monotaro-ga4.analytics_255530074.events_20230912`
+FOR SYSTEM_TIME AS OF TIMESTAMP(CONCAT('2023-09-13', ' 18:51:00'), 'Asia/Tokyo')
+LEFT JOIN UNNEST([STRUCT(
+  `bqutil.fn.get_value`('page_location', event_params).string_value AS page_location,
+  `bqutil.fn.get_value`('event_action', event_params).string_value AS event_action,
+  `bqutil.fn.get_value`('event_label', event_params).string_value AS event_label,
+  `bqutil.fn.get_value`('ga_session_id', event_params).string_value AS ga_session_id,
+  `bqutil.fn.get_value`('cd30', event_params).string_value AS sp_view,
+  `bqutil.fn.get_value`('source', event_params).string_value AS source,
+  `bqutil.fn.get_value`('medium', event_params).string_value AS medium,
+  `bqutil.fn.get_value`('campaign', event_params).string_value AS campaign,
+  `bqutil.fn.get_value`('term', event_params).string_value AS term,
+  `bqutil.fn.get_value`('entrances', event_params).int_value = 1 AS is_entrance,
+  `bqutil.fn.get_value`('gclid', event_params).int_value = 1 AS gclid,
+  `bqutil.fn.get_value`('cd49', event_params).string_value AS landing_pagegroup,
+  `bqutil.fn.get_value`('cd3', event_params).string_value AS uid,
+  `bqutil.fn.get_value`('cd5', event_params).string_value AS session_registered,
+  `bqutil.fn.get_value`('cd7', event_params).string_value AS hit_query_params
+)]) AS params
+
+),
+
+common_counts AS (
+SELECT 
+  COUNT(DISTINCT ga_general.concatenated_key) AS ga_general_distinct_count,
+  COUNT(DISTINCT ga_general.uid) AS uid_distinct_count,
+  COUNT(DISTINCT ga_general.session_registered) AS session_registered_distinct_count,
+  COUNT(DISTINCT ga_general.hit_query_params) AS hit_query_params_distinct_count,
+  COUNT(DISTINCT ga_general.manual_campaign_id) AS manual_campaign_id_distinct_count,
+  COUNT(DISTINCT ga_general.manual_campaign_name) AS manual_campaign_name_distinct_count,
+  COUNT(DISTINCT ga_general.manual_source) AS manual_source_distinct_count,
+  COUNT(DISTINCT ga_general.manual_medium) AS manual_medium_distinct_count,
+  COUNT(DISTINCT ga_general.manual_term) AS manual_term_distinct_count,
+  COUNT(DISTINCT ga_general.manual_content) AS manual_content_distinct_count,
+  COUNT(DISTINCT ga_general.gclid) AS gclid_distinct_count,
+  COUNT(DISTINCT ga_general.dclid) AS dclid_distinct_count,
+  COUNT(DISTINCT ga_general.srsltid) AS srsltid_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.concatenated_key = ga_general.concatenated_key, ga_general.concatenated_key, NULL)) AS common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.concatenated_key is null , ga_general.concatenated_key, NULL)) AS different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.uid = ga_general.uid, ga_general.concatenated_key, NULL)) AS uid_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.uid <> ga_general.uid or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS uid_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.session_registered = ga_general.session_registered, ga_general.concatenated_key, NULL)) AS session_registered_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.session_registered <> ga_general.session_registered or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS session_registered_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.hit_query_params = ga_general.hit_query_params, ga_general.concatenated_key, NULL)) AS hit_query_params_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.hit_query_params <> ga_general.hit_query_params or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS hit_query_params_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_campaign_id = ga_general.manual_campaign_id, ga_general.concatenated_key, NULL)) AS manual_campaign_id_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_campaign_id <> ga_general.manual_campaign_id or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS manual_campaign_id_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_campaign_name = ga_general.manual_campaign_name, ga_general.concatenated_key, NULL)) AS manual_campaign_name_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_campaign_name <> ga_general.manual_campaign_name or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS manual_campaign_name_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_source = ga_general.manual_source, ga_general.concatenated_key, NULL)) AS manual_source_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_source <> ga_general.manual_source or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS manual_source_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_medium = ga_general.manual_medium, ga_general.concatenated_key, NULL)) AS manual_medium_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_medium <> ga_general.manual_medium or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS manual_medium_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_term = ga_general.manual_term, ga_general.concatenated_key, NULL)) AS manual_term_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_term <> ga_general.manual_term or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS manual_term_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_content = ga_general.manual_content, ga_general.concatenated_key, NULL)) AS manual_content_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.manual_content <> ga_general.manual_content or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS manual_content_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.gclid = ga_general.gclid, ga_general.concatenated_key, NULL)) AS gclid_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.gclid <> ga_general.gclid or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS gclid_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.dclid = ga_general.dclid, ga_general.concatenated_key, NULL)) AS dclid_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.dclid <> ga_general.dclid or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS dclid_different_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.srsltid = ga_general.srsltid, ga_general.concatenated_key, NULL)) AS srsltid_common_distinct_count,
+  COUNT(DISTINCT IF(ga_fresh.srsltid <> ga_general.srsltid or ga_fresh.concatenated_key is null, ga_general.concatenated_key, NULL)) AS srsltid_different_distinct_count
+FROM ga_general
+LEFT JOIN ga_fresh
+ON ga_general.concatenated_key = ga_fresh.concatenated_key)
+
+SELECT 
+  ga_general_distinct_count,
+  common_distinct_count,
+  different_distinct_count,
+  uid_common_distinct_count,
+  uid_different_distinct_count,
+  session_registered_common_distinct_count,
+  session_registered_different_distinct_count,
+  hit_query_params_common_distinct_count,
+  hit_query_params_different_distinct_count,
+  manual_campaign_id_common_distinct_count,
+  manual_campaign_id_different_distinct_count,
+  manual_campaign_name_common_distinct_count,
+  manual_campaign_name_different_distinct_count,
+  manual_source_common_distinct_count,
+  manual_source_different_distinct_count,
+  manual_medium_common_distinct_count,
+  manual_medium_different_distinct_count,
+  manual_term_common_distinct_count,
+  manual_term_different_distinct_count,
+  manual_content_common_distinct_count,
+  manual_content_different_distinct_count,
+  gclid_common_distinct_count,
+  gclid_different_distinct_count,
+  dclid_common_distinct_count,
+  dclid_different_distinct_count,
+  srsltid_common_distinct_count,
+  srsltid_different_distinct_count,
+  CAST(different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS different_distinct_percentage,
+
+  CAST(uid_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS uid_common_distinct_percentage,
+
+  CAST(uid_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS uid_different_distinct_percentage,
+
+  CAST(session_registered_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS session_registered_common_distinct_percentage,
+
+  CAST(session_registered_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS session_registered_different_distinct_percentage,
+
+  CAST(hit_query_params_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS hit_query_params_common_distinct_percentage,
+
+  CAST(hit_query_params_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS hit_query_params_different_distinct_percentage,
+
+  CAST(manual_campaign_id_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_campaign_id_common_distinct_percentage,
+
+  CAST(manual_campaign_id_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_campaign_id_different_distinct_percentage,
+
+  CAST(manual_campaign_name_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_campaign_name_common_distinct_percentage,
+
+  CAST(manual_campaign_name_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_campaign_name_different_distinct_percentage,
+
+  CAST(manual_source_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_source_common_distinct_percentage,
+
+  CAST(manual_source_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_source_different_distinct_percentage,
+
+  CAST(manual_medium_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_medium_common_distinct_percentage,
+
+  CAST(manual_medium_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_medium_different_distinct_percentage,
+
+  CAST(manual_term_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_term_common_distinct_percentage,
+
+  CAST(manual_term_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_term_different_distinct_percentage,
+
+  CAST(manual_content_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_content_common_distinct_percentage,
+
+  CAST(manual_content_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS manual_content_different_distinct_percentage,
+
+  CAST(gclid_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS gclid_common_distinct_percentage,
+
+  CAST(gclid_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS gclid_different_distinct_percentage,
+
+  CAST(dclid_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS dclid_common_distinct_percentage,
+
+  CAST(dclid_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS dclid_different_distinct_percentage,
+
+  CAST(srsltid_common_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS srsltid_common_distinct_percentage,
+
+  CAST(srsltid_different_distinct_count AS FLOAT64) / CAST(ga_general_distinct_count AS FLOAT64) AS srsltid_different_distinct_percentage
+FROM common_counts;
